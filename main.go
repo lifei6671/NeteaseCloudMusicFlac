@@ -13,6 +13,10 @@ import (
 	"io"
 )
 
+const(
+	SuggestionUrl = "http://sug.music.baidu.com/info/suggestion";
+	Fmlink = "http://music.baidu.com/data/music/fmlink";
+)
 func main()  {
 	if(len(os.Args) <= 1){
 		fmt.Println("请输入网易音乐链接.");
@@ -60,8 +64,6 @@ func main()  {
 		}
 	}
 
-
-
 	reg := regexp.MustCompile(`<ul class="f-hide">(.*?)</ul>`);
 
 	mm := reg.FindAllString(string(responseBody),-1);
@@ -77,7 +79,7 @@ func main()  {
 
 		for _,item := range urlli{
 
-			murl,_ := url.Parse("http://sug.music.baidu.com/info/suggestion");
+			murl,_ := url.Parse(SuggestionUrl);
 
 			query := murl.Query();
 			query.Set("word", string(item[1]));
@@ -92,7 +94,6 @@ func main()  {
 				continue;
 			}
 			content,err := ioutil.ReadAll(res.Body);
-			fmt.Println(murl);
 			res.Body.Close();
 			if(err != nil){
 				fmt.Println("解析",murl,"响应值时出错：",err);
@@ -109,13 +110,13 @@ func main()  {
 			}
 
 			if _,ok := dat["data"]; ok == false{
-				fmt.Println("没有找到音乐资源:",string(content));
+				fmt.Println("没有找到音乐资源:",string(item[1]));
 				continue;
 			}
 
 			songid := dat["data"].(map[string]interface{})["song"].([]interface{})[0].(map[string]interface{})["songid"].(string);
 
-			link ,err:= url.Parse("http://music.baidu.com/data/music/fmlink");
+			link ,err:= url.Parse(Fmlink);
 			if(err != nil){
 				fmt.Println("解析音乐链接时出错：",err);
 				continue;
@@ -125,6 +126,7 @@ func main()  {
 			query.Set("type","flac");
 			link.RawQuery = query.Encode();
 			res ,err = http.Get(link.String());
+
 			if(err != nil){
 				fmt.Println("获取音乐文件时出错：",err);
 				continue;
