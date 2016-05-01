@@ -14,6 +14,10 @@ import (
 )
 
 func main()  {
+	if(len(os.Args) <= 1){
+		fmt.Println("请输入网易音乐链接.");
+		return ;
+	}
 	fmt.Println("fetching msg from ",os.Args[1]);
 
 	nurl := strings.Replace(os.Args[1],"#/","",-1);
