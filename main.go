@@ -22,6 +22,52 @@ const (
 //设置并发为20个.
 var itemChan = make(chan bool, 10)
 
+//通过百度接口查询歌曲信息.
+func getSongInfo(word string) (map[string]interface{}, error) {
+	query := url.Values{}
+	query.Set("word", word)
+	query.Set("version", "2")
+	query.Set("from", "0")
+	res, err := DownloadString(SuggestionUrl, query)
+	if err != nil {
+		fmt.Println("获取音乐列表时出错：", err)
+		return nil, err
+	}
+
+	var data map[string]interface{}
+	err = json.Unmarshal([]byte(res), &data)
+	if err != nil {
+		fmt.Println("反序列化JSON时出错:", err)
+		return nil, err
+	}
+
+	if _, ok := data["data"]; ok == false {
+		fmt.Println("没有找到音乐资源:", word)
+		return nil, err
+	}
+	return data, nil
+}
+
+//通过百度接口获取歌曲信息.
+func getSongList(songId string) (map[string]interface{}, error) {
+	query := url.Values{}
+	query.Set("songIds", songId)
+	query.Set("type", "flac")
+	res, err := DownloadString(Fmlink, query)
+	if err != nil {
+		fmt.Println("获取音乐文件时出错：", err)
+		return nil, err
+	}
+
+	var data map[string]interface{}
+	err = json.Unmarshal(res, &data)
+	if code, ok := data["errorCode"]; (ok && code.(float64) == 22005) || err != nil {
+		fmt.Println("解析音乐文件时出错：", err)
+		return nil, err
+	}
+	return data, nil
+}
+
 func main() {
 	if len(os.Args) <= 1 {
 		fmt.Println("请输入网易音乐链接.")
@@ -60,42 +106,15 @@ func main() {
 		urlli := reg.FindAllSubmatch([]byte(contents), -1)
 		for _, item := range urlli {
 
-			query := url.Values{}
-			query.Set("word", string(item[1]))
-			query.Set("version", "2")
-			query.Set("from", "0")
-			res, err := DownloadString(SuggestionUrl, query)
+			dat, err := getSongInfo(string(item[1]))
+
 			if err != nil {
-				fmt.Println("获取音乐列表时出错：", err)
 				continue
 			}
+			songId := dat["data"].(map[string]interface{})["song"].([]interface{})[0].(map[string]interface{})["songId"].(string)
+			data,err := getSongList(songId)
 
-			var dat map[string]interface{}
-			err = json.Unmarshal([]byte(res), &dat)
 			if err != nil {
-				fmt.Println("反序列化JSON时出错:", err)
-				continue
-			}
-
-			if _, ok := dat["data"]; ok == false {
-				fmt.Println("没有找到音乐资源:", string(item[1]))
-				continue
-			}
-
-			songid := dat["data"].(map[string]interface{})["song"].([]interface{})[0].(map[string]interface{})["songid"].(string)
-			query = url.Values{}
-			query.Set("songIds", songid)
-			query.Set("type", "flac")
-			res, err = DownloadString(Fmlink, query)
-			if err != nil {
-				fmt.Println("获取音乐文件时出错：", err)
-				continue
-			}
-
-			var data map[string]interface{}
-			err = json.Unmarshal(res, &data)
-			if code, ok := data["errorCode"]; (ok && code.(float64) == 22005) || err != nil {
-				fmt.Println("解析音乐文件时出错：", err)
 				continue
 			}
 
@@ -114,11 +133,11 @@ func main() {
 			<-itemChan
 			go func() {
 				defer func() {
+					waitGroup.Done()
 					itemChan <- true
 				}()
 
-				fmt.Println("正在下载 ", songName, " ......")
-				defer waitGroup.Done()
+				fmt.Printf("正在下载 [%s] - [%s]", songName, songLink)
 				songRes, err := http.Get(songLink)
 				if err != nil {
 					fmt.Println("下载文件时出错：", songLink)
